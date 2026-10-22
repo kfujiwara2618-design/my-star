@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Luxury Pro AR Camera - Light & Stable Edition</title>
+  <title>Luxury Pro AR Camera - Toggle BG & Light Edition</title>
   <style>
     body {
       margin: 0;
@@ -46,11 +46,11 @@
       left: 50%;
       transform: translateX(-50%);
       display: flex;
-      gap: 8px;
-      background: rgba(15, 15, 15, 0.65);
+      gap: 6px;
+      background: rgba(15, 15, 15, 0.7);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
-      padding: 6px 12px;
+      padding: 6px 10px;
       border-radius: 25px;
       border: 1px solid rgba(228, 195, 139, 0.4);
       z-index: 10;
@@ -61,13 +61,14 @@
       background: transparent;
       border: 1px solid rgba(228, 195, 139, 0.5);
       color: #f7f3ed;
-      padding: 5px 10px;
+      padding: 5px 8px;
       border-radius: 15px;
-      font-size: 10px;
+      font-size: 9.5px;
       letter-spacing: 0.05em;
       cursor: pointer;
       transition: all 0.2s;
       outline: none;
+      white-space: nowrap;
     }
     .control-btn:active {
       transform: scale(0.95);
@@ -122,12 +123,14 @@
 
   <div id="top-controls">
     <button class="control-btn" id="effect-btn" onclick="toggleEffectPower()">FX: Mid</button>
-    <div style="width: 1px; height: 16px; background: rgba(228,195,139,0.3); margin: 0 2px;"></div>
+    <div style="width: 1px; height: 14px; background: rgba(228,195,139,0.3); margin: 0 1px;"></div>
+    <button class="control-btn" id="bg-btn" onclick="toggleBackground()">BG: ON</button>
+    <div style="width: 1px; height: 14px; background: rgba(228,195,139,0.3); margin: 0 1px;"></div>
     <button class="control-btn" onclick="switchCamera()">Cam ⟳</button>
   </div>
 
   <div id="info-overlay">
-    LUXURY PRO: <span id="status">INITIALIZING...</span> | 高速化・安定版
+    LUXURY PRO: <span id="status">INITIALIZING...</span> | 軽量・背景切替対応
   </div>
 
   <div id="ar-layer">
@@ -154,6 +157,8 @@
     let isDetecting = false;
     let frameCounter = 0;
 
+    let bgEnabled = true; // 背景（夜景AR）のON/OFF状態
+
     function applyZoom(level) {
       currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, level));
       webcamEl.style.transform = `scale(${currentZoom})`;
@@ -167,7 +172,7 @@
         const constraints = {
           video: {
             facingMode: useFrontCamera ? "user" : { exact: "environment" },
-            width: { ideal: 1280 }, // 軽量化のため解像度を最適化
+            width: { ideal: 1280 },
             height: { ideal: 720 }
           },
           audio: false
@@ -214,7 +219,6 @@
       }
     }
 
-    // 重い認識処理をフレーム間引きして非同期で実施
     async function triggerFaceDetect() {
       if (isDetecting || webcamEl.paused || webcamEl.ended || !faceapi.nets.tinyFaceDetector.params) return;
       isDetecting = true;
@@ -263,7 +267,7 @@
     });
 
     // --- Canvasリサイズ ---
-    let dpr = Math.min(window.devicePixelRatio || 1, 2); // 解像度上限を2に設定して安定化
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
 
     function resizeCanvas() {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -279,7 +283,7 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    // --- エフェクト強弱設定 ---
+    // --- エフェクト設定 & 背景ON/OFF切り替え ---
     let effectPowerLevel = 2; // 1: Low, 2: Mid, 3: High
     function toggleEffectPower() {
       effectPowerLevel = (effectPowerLevel % 3) + 1;
@@ -287,86 +291,87 @@
       document.getElementById('effect-btn').textContent = `FX: ${names[effectPowerLevel]}`;
     }
 
+    function toggleBackground() {
+      bgEnabled = !bgEnabled;
+      document.getElementById('bg-btn').textContent = bgEnabled ? 'BG: ON' : 'BG: OFF';
+    }
+
     // =============================================================
-    // ★ 高速＆ラグジュアリー演出（軽量最適化済み）
+    // ★ 軽量化・厳選されたラグジュアリー演出
     // =============================================================
     const luxuryColors = ['#FFF8DC', '#FFE4B5', '#FFD700', '#FFFFFF'];
 
-    // 1. 軽量化された星パーティクル（35個）
+    // 1. 星パーティクル（20個に削減してクリーンで軽い動作に）
     const starParticles = [];
-    for (let i = 0; i < 35; i++) {
+    for (let i = 0; i < 20; i++) {
       starParticles.push({
         x: Math.random() * window.innerWidth,
         y: Math.random() * window.innerHeight,
-        size: Math.random() * 8 + 3,
-        speedY: Math.random() * 0.5 + 0.2,
-        opacity: Math.random() * 0.6 + 0.4,
+        size: Math.random() * 7 + 2.5,
+        speedY: Math.random() * 0.4 + 0.15,
+        opacity: Math.random() * 0.5 + 0.3,
         color: luxuryColors[Math.floor(Math.random() * luxuryColors.length)],
         onFace: false
       });
     }
 
-    // 2. 軽量化された流れ星（最大1〜2本）
+    // 2. 流れ星（最大1本に制限）
     const shootingStars = [];
     function createShootingStar() {
-      const isLarge = Math.random() > 0.5;
       return {
-        x: Math.random() * window.innerWidth * 0.8 + window.innerWidth * 0.1,
-        y: Math.random() * (window.innerHeight * 0.3),
-        length: isLarge ? 160 : 90,
-        speed: isLarge ? 14 : 10,
-        width: isLarge ? 2.2 : 1.2,
+        x: Math.random() * window.innerWidth * 0.7 + window.innerWidth * 0.15,
+        y: Math.random() * (window.innerHeight * 0.25),
+        length: 120,
+        speed: 12,
+        width: 1.5,
         angle: Math.PI / 4,
         opacity: 1,
         life: 0,
-        maxLife: 25,
+        maxLife: 20,
         color: '#FFE4B5'
       };
     }
 
-    // 3. ミニマルなゆらめくボケ（8個）
+    // 3. ミニマルなボケ（4個に削減）
     const bokehs = [];
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 4; i++) {
       bokehs.push({
         x: Math.random() * window.innerWidth,
         y: Math.random() * window.innerHeight,
-        radius: Math.random() * 30 + 15,
+        radius: Math.random() * 25 + 10,
         color: luxuryColors[i % luxuryColors.length],
-        alpha: 0.08
+        alpha: 0.06
       });
     }
 
     let timeCount = 0;
 
-    // 軽量版：輝くクロス星描画（処理負荷オフロード）
+    // 描画：クロス星
     function drawFastStar(ctx, x, y, size, color, opacity, onFace) {
       ctx.globalAlpha = onFace ? opacity * 0.15 : opacity;
       ctx.fillStyle = color;
       ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 0.8;
 
-      // 十字クロス光彩
       ctx.beginPath();
-      ctx.moveTo(x - size * 1.2, y); ctx.lineTo(x + size * 1.2, y);
-      ctx.moveTo(x, y - size * 1.2); ctx.lineTo(x, y + size * 1.2);
+      ctx.moveTo(x - size, y); ctx.lineTo(x + size, y);
+      ctx.moveTo(x, y - size); ctx.lineTo(x, y + size);
       ctx.stroke();
 
-      // 中央の輝き核
       ctx.beginPath();
-      ctx.arc(x, y, size * 0.35, 0, Math.PI * 2);
+      ctx.arc(x, y, size * 0.3, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // 軽量版：流れ星描画
+    // 描画：流れ星
     function drawFastShootingStar(ctx, star) {
       ctx.globalAlpha = star.opacity;
-
       const tailX = star.x - Math.cos(star.angle) * star.length;
       const tailY = star.y - Math.sin(star.angle) * star.length;
 
       const grad = ctx.createLinearGradient(star.x, star.y, tailX, tailY);
       grad.addColorStop(0, '#FFFFFF');
-      grad.addColorStop(0.3, star.color);
+      grad.addColorStop(0.4, star.color);
       grad.addColorStop(1, 'transparent');
 
       ctx.strokeStyle = grad;
@@ -377,18 +382,16 @@
       ctx.stroke();
     }
 
-    // 軽量版：夜景背景描画
+    // 描画：背景夜景AR（bgEnabledがtrueの場合のみ描画）
     function drawFastNightCity(ctx, width, height) {
-      // グラデーション背景
       const skyGrad = ctx.createLinearGradient(0, 0, 0, height);
-      skyGrad.addColorStop(0, 'rgba(5, 8, 20, 0.4)');
-      skyGrad.addColorStop(1, 'rgba(30, 20, 25, 0.45)');
+      skyGrad.addColorStop(0, 'rgba(5, 8, 20, 0.45)');
+      skyGrad.addColorStop(1, 'rgba(25, 18, 25, 0.5)');
       ctx.fillStyle = skyGrad;
       ctx.fillRect(0, 0, width, height);
 
-      // ゆらめくライトボケ（8個）
       bokehs.forEach((b, i) => {
-        const pulse = Math.sin(timeCount * 2 + i) * 0.03;
+        const pulse = Math.sin(timeCount * 1.5 + i) * 0.02;
         ctx.globalAlpha = b.alpha + pulse;
         ctx.fillStyle = b.color;
         ctx.beginPath();
@@ -402,8 +405,7 @@
       timeCount += 0.016;
       frameCounter++;
 
-      // 8フレームごとに一度だけ重い顔検知を呼び出し（安定化）
-      if (frameCounter % 8 === 0) {
+      if (frameCounter % 10 === 0) {
         triggerFaceDetect();
       }
 
@@ -412,13 +414,15 @@
 
       ctx.clearRect(0, 0, logicalWidth, logicalHeight);
 
-      // 1. 夜景AR背景描画
-      drawFastNightCity(ctx, logicalWidth, logicalHeight);
+      // 背景夜景ON/OFF制御
+      if (bgEnabled) {
+        drawFastNightCity(ctx, logicalWidth, logicalHeight);
+      }
 
-      const activeCount = effectPowerLevel === 1 ? 0.5 : (effectPowerLevel === 2 ? 0.8 : 1.2);
+      const activeCount = effectPowerLevel === 1 ? 0.4 : (effectPowerLevel === 2 ? 0.7 : 1.0);
 
-      // 2. 流れ星の生成・描画
-      if (Math.random() < 0.02 * activeCount && shootingStars.length < 2) {
+      // 流れ星の生成・描画
+      if (Math.random() < 0.012 * activeCount && shootingStars.length < 1) {
         shootingStars.push(createShootingStar());
       }
 
@@ -428,8 +432,8 @@
         star.y += Math.sin(star.angle) * star.speed;
         star.life++;
 
-        if (star.life > star.maxLife - 8) {
-          star.opacity -= 0.12;
+        if (star.life > star.maxLife - 6) {
+          star.opacity -= 0.15;
         }
 
         if (star.life >= star.maxLife || star.opacity <= 0) {
@@ -439,17 +443,16 @@
         }
       }
 
-      // 3. 星パーティクルの描写＆顔認識回避
+      // 星パーティクルの描画 ＆ 顔認識回避
       starParticles.forEach((p) => {
         p.y += p.speedY * activeCount;
-        const opacity = 0.4 + Math.sin(timeCount * 2 + p.x) * 0.3;
+        const opacity = 0.35 + Math.sin(timeCount * 1.8 + p.x) * 0.3;
 
         if (p.y > logicalHeight + 10) {
           p.y = -10;
           p.x = Math.random() * logicalWidth;
         }
 
-        // 顔回避ロジック（キャッシュされた情報から高速判定）
         p.onFace = false;
         if (faces.length > 0) {
           for (let i = 0; i < faces.length; i++) {
@@ -481,7 +484,6 @@
       const saveCtx = saveCanvas.getContext('2d');
       saveCtx.scale(dpr, dpr);
 
-      // カメラ描画
       if (webcamEl.readyState === webcamEl.HAVE_ENOUGH_DATA) {
         const vW = webcamEl.videoWidth;
         const vH = webcamEl.videoHeight;
@@ -505,10 +507,8 @@
         saveCtx.restore();
       }
 
-      // AR合成
       saveCtx.drawImage(arCanvas, 0, 0, logicalWidth, logicalHeight);
 
-      // 保存処理
       const jpgDataUrl = saveCanvas.toDataURL('image/jpeg', 0.92);
       const link = document.createElement('a');
       link.download = 'luxury_camera_' + Date.now() + '.jpg';
@@ -521,7 +521,6 @@
       }, 2500);
     });
 
-    // 初期化
     initCamera();
   </script>
 </body>
