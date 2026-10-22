@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Luxury Pro AR Camera - Night City & Shooting Stars HD</title>
+  <title>Luxury Pro AR Camera - Light & Stable Edition</title>
   <style>
     body {
       margin: 0;
@@ -113,7 +113,7 @@
       box-shadow: 0 5px 15px rgba(0,0,0,0.5), inset 0 1px 3px rgba(0,0,0,0.4);
     }
   </style>
-  <!-- Face-api.js の読み込み (人物認識用) -->
+  <!-- Face-api.js の読み込み -->
   <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
 </head>
 <body>
@@ -127,7 +127,7 @@
   </div>
 
   <div id="info-overlay">
-    LUXURY NIGHT AR MODE: <span id="status">MODEL LOADING...</span> | JPG保存 | 流れ星 & 夜景AR
+    LUXURY PRO: <span id="status">INITIALIZING...</span> | 高速化・安定版
   </div>
 
   <div id="ar-layer">
@@ -151,6 +151,8 @@
     let useFrontCamera = false;
     let currentStream = null;
     let faces = [];
+    let isDetecting = false;
+    let frameCounter = 0;
 
     function applyZoom(level) {
       currentZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, level));
@@ -165,8 +167,8 @@
         const constraints = {
           video: {
             facingMode: useFrontCamera ? "user" : { exact: "environment" },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
+            width: { ideal: 1280 }, // 軽量化のため解像度を最適化
+            height: { ideal: 720 }
           },
           audio: false
         };
@@ -199,7 +201,7 @@
       initCamera();
     }
 
-    // --- 顔認識 (Face-api.js) の実装 ---
+    // --- 顔認識の軽量化（間引き検知） ---
     async function loadModels() {
       const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
       await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
@@ -210,23 +212,23 @@
       if (!faceapi.nets.tinyFaceDetector.params) {
         await loadModels();
       }
-      detectFaces();
     }
 
-    async function detectFaces() {
-      if (webcamEl.paused || webcamEl.ended || !faceapi.nets.tinyFaceDetector.params) {
-        requestAnimationFrame(detectFaces);
-        return;
+    // 重い認識処理をフレーム間引きして非同期で実施
+    async function triggerFaceDetect() {
+      if (isDetecting || webcamEl.paused || webcamEl.ended || !faceapi.nets.tinyFaceDetector.params) return;
+      isDetecting = true;
+      try {
+        const detections = await faceapi.detectAllFaces(webcamEl, new faceapi.TinyFaceDetectorOptions({ inputSize: 160 }));
+        const displaySize = { width: arCanvas.width / dpr, height: arCanvas.height / dpr };
+        faces = faceapi.resizeResults(detections, displaySize);
+      } catch (e) {
+        console.error(e);
       }
-
-      const detections = await faceapi.detectAllFaces(webcamEl, new faceapi.TinyFaceDetectorOptions());
-      const displaySize = { width: arCanvas.width / dpr, height: arCanvas.height / dpr };
-      faces = faceapi.resizeResults(detections, displaySize);
-
-      requestAnimationFrame(detectFaces);
+      isDetecting = false;
     }
 
-    // --- ピンチズームの実装 ---
+    // --- ピンチズーム操作 ---
     let initialPinchDistance = null;
     let zoomStartValue = 1;
 
@@ -250,24 +252,21 @@
         const currentDistance = getPinchDistance(e.touches);
         if (initialPinchDistance > 0) {
           const distanceRatio = currentDistance / initialPinchDistance;
-          const newZoom = zoomStartValue * distanceRatio;
-          applyZoom(newZoom);
+          applyZoom(zoomStartValue * distanceRatio);
         }
         e.preventDefault();
       }
     }, { passive: false });
 
     window.addEventListener('touchend', (e) => {
-      if (e.touches.length < 2) {
-        initialPinchDistance = null;
-      }
+      if (e.touches.length < 2) initialPinchDistance = null;
     });
 
-    // --- Canvasリサイズ処理 ---
-    let dpr = window.devicePixelRatio || 1;
+    // --- Canvasリサイズ ---
+    let dpr = Math.min(window.devicePixelRatio || 1, 2); // 解像度上限を2に設定して安定化
 
     function resizeCanvas() {
-      dpr = window.devicePixelRatio || 1;
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
       const width = window.innerWidth;
       const height = window.innerHeight;
 
@@ -289,127 +288,77 @@
     }
 
     // =============================================================
-    // ★ ラグジュアリー星 & 流れ星 & 夜景 AR システム
+    // ★ 高速＆ラグジュアリー演出（軽量最適化済み）
     // =============================================================
-    const luxuryColors = ['#FFF8DC', '#FFE4B5', '#FFD700', '#F0E68C', '#FFFFFF', '#E6E6FA', '#FFDF00'];
-    
-    // 1. 星パーティクル
+    const luxuryColors = ['#FFF8DC', '#FFE4B5', '#FFD700', '#FFFFFF'];
+
+    // 1. 軽量化された星パーティクル（35個）
     const starParticles = [];
-    for (let i = 0; i < 90; i++) {
+    for (let i = 0; i < 35; i++) {
       starParticles.push({
         x: Math.random() * window.innerWidth,
         y: Math.random() * window.innerHeight,
-        size: Math.random() * 12 + 4,
-        speedY: Math.random() * 0.8 + 0.2,
-        speedX: (Math.random() - 0.5) * 0.6,
-        opacity: Math.random() * 0.7 + 0.3,
+        size: Math.random() * 8 + 3,
+        speedY: Math.random() * 0.5 + 0.2,
+        opacity: Math.random() * 0.6 + 0.4,
         color: luxuryColors[Math.floor(Math.random() * luxuryColors.length)],
-        twinkleSpeed: Math.random() * 0.05 + 0.02,
-        rotation: Math.random() * Math.PI,
-        points: Math.random() > 0.4 ? 4 : 5, // 4角星か5角星
         onFace: false
       });
     }
 
-    // 2. ラグジュアリー流れ星（サイズの異なるShooting Stars）
+    // 2. 軽量化された流れ星（最大1〜2本）
     const shootingStars = [];
     function createShootingStar() {
-      const isLarge = Math.random() > 0.65;
-      const sizeType = isLarge ? 'LARGE' : (Math.random() > 0.5 ? 'MEDIUM' : 'SMALL');
-      
-      let length, speed, width;
-      if (sizeType === 'LARGE') {
-        length = Math.random() * 250 + 200;
-        speed = Math.random() * 12 + 15;
-        width = Math.random() * 3 + 2.5;
-      } else if (sizeType === 'MEDIUM') {
-        length = Math.random() * 150 + 100;
-        speed = Math.random() * 10 + 10;
-        width = Math.random() * 2 + 1.5;
-      } else {
-        length = Math.random() * 80 + 50;
-        speed = Math.random() * 8 + 8;
-        width = Math.random() * 1.2 + 0.8;
-      }
-
-      const angle = Math.PI / 4 + (Math.random() - 0.5) * 0.2; // 斜め45度前後
-
+      const isLarge = Math.random() > 0.5;
       return {
-        x: Math.random() * window.innerWidth * 1.2 - window.innerWidth * 0.2,
-        y: Math.random() * (window.innerHeight * 0.5) - 100,
-        length: length,
-        speed: speed,
-        width: width,
-        angle: angle,
+        x: Math.random() * window.innerWidth * 0.8 + window.innerWidth * 0.1,
+        y: Math.random() * (window.innerHeight * 0.3),
+        length: isLarge ? 160 : 90,
+        speed: isLarge ? 14 : 10,
+        width: isLarge ? 2.2 : 1.2,
+        angle: Math.PI / 4,
         opacity: 1,
         life: 0,
-        maxLife: Math.random() * 40 + 30,
-        color: luxuryColors[Math.floor(Math.random() * luxuryColors.length)]
+        maxLife: 25,
+        color: '#FFE4B5'
       };
     }
 
-    // 3. 変化するボケ（Luxury Bokeh Lights）
+    // 3. ミニマルなゆらめくボケ（8個）
     const bokehs = [];
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < 8; i++) {
       bokehs.push({
         x: Math.random() * window.innerWidth,
         y: Math.random() * window.innerHeight,
-        radius: Math.random() * 35 + 15,
-        color: luxuryColors[Math.floor(Math.random() * luxuryColors.length)],
-        alpha: Math.random() * 0.15 + 0.05,
-        pulseSpeed: Math.random() * 0.02 + 0.005,
-        driftX: (Math.random() - 0.5) * 0.3,
-        driftY: (Math.random() - 0.5) * 0.3
+        radius: Math.random() * 30 + 15,
+        color: luxuryColors[i % luxuryColors.length],
+        alpha: 0.08
       });
     }
 
     let timeCount = 0;
 
-    // 星の描画関数（クロス輝き星 / 4角・5角）
-    function drawLuxuryStar(ctx, x, y, size, color, opacity, rotation, points, onFace) {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(rotation);
-
-      if (onFace) {
-        ctx.globalAlpha = opacity * 0.15;
-      } else {
-        ctx.globalAlpha = opacity;
-      }
-
+    // 軽量版：輝くクロス星描画（処理負荷オフロード）
+    function drawFastStar(ctx, x, y, size, color, opacity, onFace) {
+      ctx.globalAlpha = onFace ? opacity * 0.15 : opacity;
       ctx.fillStyle = color;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = size * 1.5;
-
-      // 輝くクロス＆ポリゴン描画
-      ctx.beginPath();
-      const outerRadius = size;
-      const innerRadius = size * 0.35;
-      for (let i = 0; i < points * 2; i++) {
-        const r = (i % 2 === 0) ? outerRadius : innerRadius;
-        const currAngle = (i * Math.PI) / points;
-        const px = Math.cos(currAngle) * r;
-        const py = Math.sin(currAngle) * r;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      ctx.closePath();
-      ctx.fill();
-
-      // 中央の強いダイヤモンド輝き線
       ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 1;
+
+      // 十字クロス光彩
       ctx.beginPath();
-      ctx.moveTo(-size * 1.2, 0); ctx.lineTo(size * 1.2, 0);
-      ctx.moveTo(0, -size * 1.2); ctx.lineTo(0, size * 1.2);
+      ctx.moveTo(x - size * 1.2, y); ctx.lineTo(x + size * 1.2, y);
+      ctx.moveTo(x, y - size * 1.2); ctx.lineTo(x, y + size * 1.2);
       ctx.stroke();
 
-      ctx.restore();
+      // 中央の輝き核
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.35, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    // 流れ星の描画関数
-    function drawShootingStar(ctx, star) {
-      ctx.save();
+    // 軽量版：流れ星描画
+    function drawFastShootingStar(ctx, star) {
       ctx.globalAlpha = star.opacity;
 
       const tailX = star.x - Math.cos(star.angle) * star.length;
@@ -417,100 +366,59 @@
 
       const grad = ctx.createLinearGradient(star.x, star.y, tailX, tailY);
       grad.addColorStop(0, '#FFFFFF');
-      grad.addColorStop(0.2, star.color);
+      grad.addColorStop(0.3, star.color);
       grad.addColorStop(1, 'transparent');
 
       ctx.strokeStyle = grad;
       ctx.lineWidth = star.width;
-      ctx.lineCap = 'round';
-
       ctx.beginPath();
       ctx.moveTo(star.x, star.y);
       ctx.lineTo(tailX, tailY);
       ctx.stroke();
-
-      // 先端のラグジュアリー輝きヘッド
-      ctx.fillStyle = '#FFFFFF';
-      ctx.shadowColor = star.color;
-      ctx.shadowBlur = 12;
-      ctx.beginPath();
-      ctx.arc(star.x, star.y, star.width * 1.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.restore();
     }
 
-    // リアルタイムラグジュアリー夜景ARを描画
-    function drawNightCityAR(ctx, width, height) {
-      // 1. ラグジュアリーグラデーション（深みのある夜空）
+    // 軽量版：夜景背景描画
+    function drawFastNightCity(ctx, width, height) {
+      // グラデーション背景
       const skyGrad = ctx.createLinearGradient(0, 0, 0, height);
-      skyGrad.addColorStop(0, 'rgba(5, 8, 22, 0.45)');
-      skyGrad.addColorStop(0.5, 'rgba(20, 15, 35, 0.35)');
-      skyGrad.addColorStop(1, 'rgba(40, 25, 20, 0.5)');
+      skyGrad.addColorStop(0, 'rgba(5, 8, 20, 0.4)');
+      skyGrad.addColorStop(1, 'rgba(30, 20, 25, 0.45)');
       ctx.fillStyle = skyGrad;
       ctx.fillRect(0, 0, width, height);
 
-      // 2. 変化するビル群のシルエット（地平線の煌びやかな夜景）
-      const cityY = height * 0.72;
-      ctx.save();
-      ctx.fillStyle = 'rgba(8, 10, 20, 0.55)';
-      
-      const buildingWidths = [40, 60, 35, 80, 50, 70, 45, 90, 65];
-      let currentX = 0;
-      let idx = 0;
-      while (currentX < width) {
-        const bWidth = buildingWidths[idx % buildingWidths.length];
-        const bHeight = 80 + Math.sin(idx * 1.5 + timeCount * 0.2) * 20 + ((idx * 37) % 90);
-        ctx.fillRect(currentX, cityY - bHeight, bWidth, bHeight + (height - cityY));
-
-        // ビルの窓の光（ちらつき変化）
-        ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
-        for (let wy = cityY - bHeight + 10; wy < cityY - 10; wy += 15) {
-          for (let wx = currentX + 8; wx < currentX + bWidth - 8; wx += 12) {
-            if (Math.sin(wx * wy + timeCount * 2) > 0.1) {
-              ctx.fillRect(wx, wy, 4, 6);
-            }
-          }
-        }
-        ctx.fillStyle = 'rgba(8, 10, 20, 0.55)';
-        currentX += bWidth + 4;
-        idx++;
-      }
-      ctx.restore();
-
-      // 3. ボケ（ゆらめく光の粒）の更新と描画
-      bokehs.forEach(b => {
-        b.x += b.driftX;
-        b.y += b.driftY;
-        if (b.x < 0) b.x = width; if (b.x > width) b.x = 0;
-        if (b.y < 0) b.y = height; if (b.y > height) b.y = 0;
-
-        const currentAlpha = b.alpha + Math.sin(timeCount * 5 + b.x) * 0.05;
-        ctx.save();
-        ctx.globalAlpha = Math.max(0.01, currentAlpha);
+      // ゆらめくライトボケ（8個）
+      bokehs.forEach((b, i) => {
+        const pulse = Math.sin(timeCount * 2 + i) * 0.03;
+        ctx.globalAlpha = b.alpha + pulse;
         ctx.fillStyle = b.color;
         ctx.beginPath();
         ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
       });
     }
 
     // --- メイン描画ループ ---
     function renderLoop() {
       timeCount += 0.016;
+      frameCounter++;
+
+      // 8フレームごとに一度だけ重い顔検知を呼び出し（安定化）
+      if (frameCounter % 8 === 0) {
+        triggerFaceDetect();
+      }
+
       const logicalWidth = window.innerWidth;
       const logicalHeight = window.innerHeight;
 
       ctx.clearRect(0, 0, logicalWidth, logicalHeight);
 
-      // 1. ラグジュアリー夜景背景ARを描画
-      drawNightCityAR(ctx, logicalWidth, logicalHeight);
+      // 1. 夜景AR背景描画
+      drawFastNightCity(ctx, logicalWidth, logicalHeight);
 
-      const activeCount = effectPowerLevel === 1 ? 0.4 : (effectPowerLevel === 2 ? 0.8 : 1.3);
+      const activeCount = effectPowerLevel === 1 ? 0.5 : (effectPowerLevel === 2 ? 0.8 : 1.2);
 
-      // 2. 流れ星（Shooting Stars）の生成・更新・描画
-      if (Math.random() < 0.04 * activeCount && shootingStars.length < 5) {
+      // 2. 流れ星の生成・描画
+      if (Math.random() < 0.02 * activeCount && shootingStars.length < 2) {
         shootingStars.push(createShootingStar());
       }
 
@@ -520,36 +428,32 @@
         star.y += Math.sin(star.angle) * star.speed;
         star.life++;
 
-        if (star.life > star.maxLife - 10) {
-          star.opacity -= 0.1;
+        if (star.life > star.maxLife - 8) {
+          star.opacity -= 0.12;
         }
 
         if (star.life >= star.maxLife || star.opacity <= 0) {
           shootingStars.splice(i, 1);
         } else {
-          drawShootingStar(ctx, star);
+          drawFastShootingStar(ctx, star);
         }
       }
 
-      // 3. 舞い散る煌びやかな星（Stars）の描写＆顔認識回避
+      // 3. 星パーティクルの描写＆顔認識回避
       starParticles.forEach((p) => {
         p.y += p.speedY * activeCount;
-        p.x += p.speedX * activeCount;
-        p.rotation += p.twinkleSpeed;
-        p.opacity = 0.4 + Math.sin(timeCount * 3 + p.x) * 0.4;
+        const opacity = 0.4 + Math.sin(timeCount * 2 + p.x) * 0.3;
 
-        // 画面外リセット
-        if (p.y > logicalHeight + 20 || p.x < -20 || p.x > logicalWidth + 20) {
-          p.y = -20;
+        if (p.y > logicalHeight + 10) {
+          p.y = -10;
           p.x = Math.random() * logicalWidth;
-          p.color = luxuryColors[Math.floor(Math.random() * luxuryColors.length)];
         }
 
-        // 顔認識回避ロジック
+        // 顔回避ロジック（キャッシュされた情報から高速判定）
         p.onFace = false;
         if (faces.length > 0) {
-          for (const face of faces) {
-            const { x, y, width, height } = face.box;
+          for (let i = 0; i < faces.length; i++) {
+            const { x, y, width, height } = faces[i].box;
             if (p.x > x && p.x < x + width && p.y > y && p.y < y + height) {
               p.onFace = true;
               break;
@@ -558,7 +462,7 @@
         }
 
         if (effectPowerLevel > 0) {
-          drawLuxuryStar(ctx, p.x, p.y, p.size, p.color, p.opacity, p.rotation, p.points, p.onFace);
+          drawFastStar(ctx, p.x, p.y, p.size, p.color, opacity, p.onFace);
         }
       });
 
@@ -566,7 +470,7 @@
     }
     renderLoop();
 
-    // --- シャッター機能（JPG自動保存 & ライブラリ保存） ---
+    // --- シャッター機能（JPG自動保存） ---
     shutterBtn.addEventListener('click', () => {
       const saveCanvas = document.createElement('canvas');
       const logicalWidth = window.innerWidth;
@@ -577,7 +481,7 @@
       const saveCtx = saveCanvas.getContext('2d');
       saveCtx.scale(dpr, dpr);
 
-      // 1. カメラ映像（ズーム状態を反映）
+      // カメラ描画
       if (webcamEl.readyState === webcamEl.HAVE_ENOUGH_DATA) {
         const vW = webcamEl.videoWidth;
         const vH = webcamEl.videoHeight;
@@ -601,21 +505,20 @@
         saveCtx.restore();
       }
 
-      // 2. ラグジュアリー夜景 ＆ 流れ星 ＆ 星ARエフェクトを重ねて合成
+      // AR合成
       saveCtx.drawImage(arCanvas, 0, 0, logicalWidth, logicalHeight);
 
-      // 3. JPGで保存
-      const jpgDataUrl = saveCanvas.toDataURL('image/jpeg', 0.95);
+      // 保存処理
+      const jpgDataUrl = saveCanvas.toDataURL('image/jpeg', 0.92);
       const link = document.createElement('a');
-      link.download = 'luxury_night_star_' + Date.now() + '.jpg';
+      link.download = 'luxury_camera_' + Date.now() + '.jpg';
       link.href = jpgDataUrl;
       link.click();
 
-      statusEl.textContent = "JPG SAVED (Check Library)";
-
+      statusEl.textContent = "JPG SAVED";
       setTimeout(() => {
         statusEl.textContent = useFrontCamera ? "FRONT CAM" : "BACK CAM";
-      }, 3000);
+      }, 2500);
     });
 
     // 初期化
